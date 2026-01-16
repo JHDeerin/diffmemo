@@ -144,8 +144,13 @@
             min-width: 1.5em;
             height: 1em;
             border-radius: 3px;
-            vertical-align: middle;
             margin: 0 0.25em;
+        }
+
+        .missing-highlight-only {
+            background-color: #ffcccc;
+            display: inline-block;
+            border-radius: 3px;
         }
 
         .extra {
@@ -156,7 +161,7 @@
     </style>
 </head>
 <body>
-    <h1>DiffMemo</h1>
+    <h1><span class="missing-highlight-only">Diff</span><span class="extra">Memo</span></h1>
     <p class="instructions">Enter the text you want to memorize, then practice reciting it from memory.</p>
 
     <details id="targetDetails">

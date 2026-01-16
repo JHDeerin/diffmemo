@@ -4,7 +4,7 @@ const vm = require('vm');
 
 // Extract and evaluate JavaScript from the HTML file
 function loadDiffMemoFunctions() {
-    const htmlPath = path.join(__dirname, 'diffmemo.html');
+    const htmlPath = path.join(__dirname, 'index.html');
     const html = fs.readFileSync(htmlPath, 'utf-8');
 
     // Extract script content

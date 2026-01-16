@@ -145,7 +145,7 @@
             height: 1em;
             border-radius: 3px;
             vertical-align: middle;
-            margin: 0 2px;
+            margin: 0 0.25em;
         }
 
         .extra {
@@ -290,16 +290,11 @@
 
             while (answerIdx < answerTokens.length || targetIdx < targetTokens.length) {
                 // Check if current target word is missing (should insert placeholder)
+                // Don't add whitespace here - let it be added before the next answer word
+                // This prevents space accumulation on repeated checks
                 while (targetIdx < targetTokens.length && !targetMatches.has(targetIdx)) {
                     if (targetTokens[targetIdx].normalized) {
-                        // Insert missing placeholder
-                        // But first, add any whitespace before the current answer position
-                        if (answerIdx < answerTokens.length) {
-                            const whitespace = answerText.substring(lastEnd, answerTokens[answerIdx].start);
-                            result += escapeHtml(whitespace);
-                            lastEnd = answerTokens[answerIdx].start;
-                        }
-                        result += '<span class="missing"></span> ';
+                        result += '<span class="missing"></span>';
                     }
                     targetIdx++;
                 }
@@ -336,7 +331,7 @@
             // Check for any remaining missing words at the end
             while (targetIdx < targetTokens.length) {
                 if (!targetMatches.has(targetIdx) && targetTokens[targetIdx].normalized) {
-                    result += ' <span class="missing"></span>';
+                    result += '<span class="missing"></span>';
                 }
                 targetIdx++;
             }
@@ -393,7 +388,7 @@
                 const missingCount = targetTokens.filter(t => t.normalized).length;
                 let html = '';
                 for (let i = 0; i < missingCount; i++) {
-                    html += '<span class="missing"></span> ';
+                    html += '<span class="missing"></span>';
                 }
                 answerBox.innerHTML = html;
                 results.innerHTML = '<span class="error-counts">0 extra words, ' + missingCount + ' missing words</span>';
@@ -412,6 +407,72 @@
             } else {
                 results.innerHTML = '<span class="error-counts">' + diff.extraCount + ' extra word' + (diff.extraCount !== 1 ? 's' : '') + ', ' + diff.missingCount + ' missing word' + (diff.missingCount !== 1 ? 's' : '') + '</span>';
                 results.className = 'visible has-errors';
+            }
+        });
+
+        // Handle backspace/delete to remove missing placeholder spans
+        answerBox.addEventListener('keydown', (e) => {
+            if (e.key !== 'Backspace' && e.key !== 'Delete') return;
+
+            const selection = window.getSelection();
+            if (!selection.rangeCount) return;
+
+            const range = selection.getRangeAt(0);
+            if (!range.collapsed) return; // Let default handle selections
+
+            const node = range.startContainer;
+            const offset = range.startOffset;
+
+            if (e.key === 'Backspace') {
+                // Check if cursor is right after a .missing span
+                let targetSpan = null;
+
+                if (node.nodeType === Node.TEXT_NODE && offset === 0) {
+                    // Cursor at start of text node - check previous sibling
+                    let prev = node.previousSibling;
+                    while (prev && prev.nodeType === Node.TEXT_NODE && prev.textContent === '') {
+                        prev = prev.previousSibling;
+                    }
+                    if (prev && prev.classList && prev.classList.contains('missing')) {
+                        targetSpan = prev;
+                    }
+                } else if (node.nodeType === Node.ELEMENT_NODE) {
+                    // Cursor between elements - check element before cursor position
+                    const prev = node.childNodes[offset - 1];
+                    if (prev && prev.classList && prev.classList.contains('missing')) {
+                        targetSpan = prev;
+                    }
+                }
+
+                if (targetSpan) {
+                    e.preventDefault();
+                    targetSpan.remove();
+                }
+            } else if (e.key === 'Delete') {
+                // Check if cursor is right before a .missing span
+                let targetSpan = null;
+
+                if (node.nodeType === Node.TEXT_NODE && offset === node.textContent.length) {
+                    // Cursor at end of text node - check next sibling
+                    let next = node.nextSibling;
+                    while (next && next.nodeType === Node.TEXT_NODE && next.textContent === '') {
+                        next = next.nextSibling;
+                    }
+                    if (next && next.classList && next.classList.contains('missing')) {
+                        targetSpan = next;
+                    }
+                } else if (node.nodeType === Node.ELEMENT_NODE) {
+                    // Cursor between elements - check element at cursor position
+                    const next = node.childNodes[offset];
+                    if (next && next.classList && next.classList.contains('missing')) {
+                        targetSpan = next;
+                    }
+                }
+
+                if (targetSpan) {
+                    e.preventDefault();
+                    targetSpan.remove();
+                }
             }
         });
     </script>

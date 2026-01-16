@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DiffMemo</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+
+        h1 {
+            margin-bottom: 5px;
+        }
+
+        .instructions {
+            color: #666;
+            margin-bottom: 20px;
+        }
+
+        details {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        summary {
+            padding: 15px;
+            cursor: pointer;
+            font-weight: 600;
+            user-select: none;
+        }
+
+        summary:hover {
+            background-color: #f9f9f9;
+        }
+
+        .target-container {
+            padding: 0 15px 15px 15px;
+        }
+
+        #targetText {
+            width: 100%;
+            min-height: 150px;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-family: inherit;
+            font-size: 16px;
+            resize: vertical;
+        }
+
+        .answer-section {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+        }
+
+        .answer-section label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+
+        #answerBox {
+            width: 100%;
+            min-height: 150px;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-family: inherit;
+            font-size: 16px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+        }
+
+        #answerBox:focus {
+            outline: none;
+            border-color: #007bff;
+            box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+        }
+
+        #checkButton {
+            margin-top: 15px;
+            padding: 12px 24px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+        #checkButton:hover {
+            background-color: #0056b3;
+        }
+
+        #results {
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 4px;
+            display: none;
+        }
+
+        #results.visible {
+            display: block;
+        }
+
+        #results.success {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+        }
+
+        #results.has-errors {
+            background-color: #f8f9fa;
+            border: 1px solid #ddd;
+        }
+
+        .success-mark {
+            color: #28a745;
+            font-size: 1.5em;
+            font-weight: bold;
+        }
+
+        .error-counts {
+            color: #666;
+        }
+
+        .missing {
+            background-color: #ffcccc;
+            display: inline-block;
+            min-width: 1.5em;
+            height: 1em;
+            border-radius: 3px;
+            vertical-align: middle;
+            margin: 0 2px;
+        }
+
+        .extra {
+            background-color: #ffffcc;
+            padding: 0 2px;
+            border-radius: 2px;
+        }
+    </style>
+</head>
+<body>
+    <h1>DiffMemo</h1>
+    <p class="instructions">Enter the text you want to memorize, then practice reciting it from memory.</p>
+
+    <details id="targetDetails">
+        <summary>Target Text (click to show/hide)</summary>
+        <div class="target-container">
+            <textarea id="targetText" placeholder="Paste or type the text you want to memorize here..."></textarea>
+        </div>
+    </details>
+
+    <div class="answer-section">
+        <label for="answerBox">Type what you remember:</label>
+        <div id="answerBox" contenteditable="true"></div>
+        <button id="checkButton">Check My Answer</button>
+        <div id="results"></div>
+    </div>
+
+    <script>
+        const targetText = document.getElementById('targetText');
+        const answerBox = document.getElementById('answerBox');
+        const checkButton = document.getElementById('checkButton');
+        const results = document.getElementById('results');
+
+        // Load saved target text from localStorage
+        const savedTarget = localStorage.getItem('diffmemo-target');
+        if (savedTarget) {
+            targetText.value = savedTarget;
+        }
+
+        // Save target text on input
+        targetText.addEventListener('input', () => {
+            localStorage.setItem('diffmemo-target', targetText.value);
+        });
+
+        // Normalize a word for comparison (lowercase, strip punctuation)
+        function normalizeWord(word) {
+            return word.toLowerCase().replace(/^[^\w]+|[^\w]+$/g, '');
+        }
+
+        // Tokenize text into words with their original forms and positions
+        function tokenize(text) {
+            const tokens = [];
+            const regex = /(\S+)/g;
+            let match;
+            while ((match = regex.exec(text)) !== null) {
+                tokens.push({
+                    original: match[1],
+                    normalized: normalizeWord(match[1]),
+                    start: match.index,
+                    end: match.index + match[1].length
+                });
+            }
+            return tokens;
+        }
+
+        // Compute LCS (Longest Common Subsequence) indices
+        function computeLCS(target, answer) {
+            const m = target.length;
+            const n = answer.length;
+
+            // Build DP table
+            const dp = Array(m + 1).fill(null).map(() => Array(n + 1).fill(0));
+
+            for (let i = 1; i <= m; i++) {
+                for (let j = 1; j <= n; j++) {
+                    if (target[i - 1].normalized === answer[j - 1].normalized) {
+                        dp[i][j] = dp[i - 1][j - 1] + 1;
+                    } else {
+                        dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
+                    }
+                }
+            }
+
+            // Backtrack to find matching indices
+            const targetMatches = new Set();
+            const answerMatches = new Set();
+            let i = m, j = n;
+
+            while (i > 0 && j > 0) {
+                if (target[i - 1].normalized === answer[j - 1].normalized) {
+                    targetMatches.add(i - 1);
+                    answerMatches.add(j - 1);
+                    i--;
+                    j--;
+                } else if (dp[i - 1][j] > dp[i][j - 1]) {
+                    i--;
+                } else {
+                    j--;
+                }
+            }
+
+            return { targetMatches, answerMatches };
+        }
+
+        // Generate diff and render result
+        function generateDiff(targetTokens, answerTokens, answerText, matches) {
+            const { targetMatches, answerMatches } = matches;
+
+            let extraCount = 0;
+            let missingCount = 0;
+
+            // Count missing words (in target but not matched)
+            for (let i = 0; i < targetTokens.length; i++) {
+                if (!targetMatches.has(i) && targetTokens[i].normalized) {
+                    missingCount++;
+                }
+            }
+
+            // Count extra words (in answer but not matched)
+            for (let i = 0; i < answerTokens.length; i++) {
+                if (!answerMatches.has(i) && answerTokens[i].normalized) {
+                    extraCount++;
+                }
+            }
+
+            // Build the highlighted output
+            // We need to preserve the original answer text structure
+            // but wrap extra words and insert missing placeholders
+
+            let result = '';
+            let lastEnd = 0;
+            let targetIdx = 0;
+            let answerIdx = 0;
+
+            // Track which target words are missing and where to insert placeholders
+            // We'll insert missing placeholders at the position where they should appear
+
+            while (answerIdx < answerTokens.length || targetIdx < targetTokens.length) {
+                // Check if current target word is missing (should insert placeholder)
+                while (targetIdx < targetTokens.length && !targetMatches.has(targetIdx)) {
+                    if (targetTokens[targetIdx].normalized) {
+                        // Insert missing placeholder
+                        // But first, add any whitespace before the current answer position
+                        if (answerIdx < answerTokens.length) {
+                            const whitespace = answerText.substring(lastEnd, answerTokens[answerIdx].start);
+                            result += escapeHtml(whitespace);
+                            lastEnd = answerTokens[answerIdx].start;
+                        }
+                        result += '<span class="missing"></span> ';
+                    }
+                    targetIdx++;
+                }
+
+                if (answerIdx >= answerTokens.length) break;
+
+                // Add whitespace before this word
+                const whitespace = answerText.substring(lastEnd, answerTokens[answerIdx].start);
+                result += escapeHtml(whitespace);
+
+                // Add the word (highlighted if extra)
+                const token = answerTokens[answerIdx];
+                if (answerMatches.has(answerIdx)) {
+                    // Matched word - no highlight
+                    result += escapeHtml(token.original);
+                    targetIdx++;
+                } else if (token.normalized) {
+                    // Extra word - yellow highlight
+                    result += '<span class="extra">' + escapeHtml(token.original) + '</span>';
+                } else {
+                    // Empty normalized (punctuation only) - just show it
+                    result += escapeHtml(token.original);
+                }
+
+                lastEnd = token.end;
+                answerIdx++;
+            }
+
+            // Add any remaining whitespace at the end
+            if (lastEnd < answerText.length) {
+                result += escapeHtml(answerText.substring(lastEnd));
+            }
+
+            // Check for any remaining missing words at the end
+            while (targetIdx < targetTokens.length) {
+                if (!targetMatches.has(targetIdx) && targetTokens[targetIdx].normalized) {
+                    result += ' <span class="missing"></span>';
+                }
+                targetIdx++;
+            }
+
+            return { html: result, extraCount, missingCount };
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Check answer handler
+        checkButton.addEventListener('click', () => {
+            const target = targetText.value;
+            const answer = answerBox.textContent || answerBox.innerText;
+
+            if (!target.trim()) {
+                results.innerHTML = '<span style="color: #dc3545;">Please enter target text first.</span>';
+                results.className = 'visible has-errors';
+                return;
+            }
+
+            const targetTokens = tokenize(target);
+            const answerTokens = tokenize(answer);
+
+            // Handle empty answer
+            if (answerTokens.length === 0 && targetTokens.length > 0) {
+                const missingCount = targetTokens.filter(t => t.normalized).length;
+                let html = '';
+                for (let i = 0; i < missingCount; i++) {
+                    html += '<span class="missing"></span> ';
+                }
+                answerBox.innerHTML = html;
+                results.innerHTML = '<span class="error-counts">0 extra words, ' + missingCount + ' missing words</span>';
+                results.className = 'visible has-errors';
+                return;
+            }
+
+            const matches = computeLCS(targetTokens, answerTokens);
+            const diff = generateDiff(targetTokens, answerTokens, answer, matches);
+
+            answerBox.innerHTML = diff.html;
+
+            if (diff.extraCount === 0 && diff.missingCount === 0) {
+                results.innerHTML = '<span class="success-mark">&#10003;</span> <span class="error-counts">0 extra words, 0 missing words</span>';
+                results.className = 'visible success';
+            } else {
+                results.innerHTML = '<span class="error-counts">' + diff.extraCount + ' extra word' + (diff.extraCount !== 1 ? 's' : '') + ', ' + diff.missingCount + ' missing word' + (diff.missingCount !== 1 ? 's' : '') + '</span>';
+                results.className = 'visible has-errors';
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+{
+  "name": "diffmemo",
+  "version": "1.0.0",
+  "description": "A tool to help memorize text through recitation practice",
+  "scripts": {
+    "test": "jest"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
+  }
+}

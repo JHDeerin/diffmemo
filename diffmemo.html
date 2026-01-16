@@ -347,13 +347,37 @@
         function escapeHtml(text) {
             const div = document.createElement('div');
             div.textContent = text;
-            return div.innerHTML;
+            // Convert newlines to <br> tags for proper HTML rendering
+            return div.innerHTML.replace(/\n/g, '<br>');
+        }
+
+        // Extract text from contenteditable div, preserving newlines
+        function getTextFromContentEditable(element) {
+            // Clone the element to avoid modifying the original
+            const clone = element.cloneNode(true);
+
+            // Replace <br> tags with newline markers
+            clone.querySelectorAll('br').forEach(br => {
+                br.replaceWith('\n');
+            });
+
+            // Replace block elements (div, p) with newline + content
+            clone.querySelectorAll('div, p').forEach(block => {
+                // Add newline before block content (unless it's the first child)
+                if (block.previousSibling) {
+                    block.before('\n');
+                }
+                // Unwrap the block element
+                block.replaceWith(...block.childNodes);
+            });
+
+            return clone.textContent || '';
         }
 
         // Check answer handler
         checkButton.addEventListener('click', () => {
             const target = targetText.value;
-            const answer = answerBox.textContent || answerBox.innerText;
+            const answer = getTextFromContentEditable(answerBox);
 
             if (!target.trim()) {
                 results.innerHTML = '<span style="color: #dc3545;">Please enter target text first.</span>';

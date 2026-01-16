@@ -211,39 +211,44 @@
             return tokens;
         }
 
-        // Compute LCS (Longest Common Subsequence) indices
+        // Compute LCS (Longest Common Subsequence) indices using forward-tracking
+        // This ensures leftmost matches are preferred (left-to-right matching)
         function computeLCS(target, answer) {
             const m = target.length;
             const n = answer.length;
 
-            // Build DP table
+            // Build suffix DP table: dp[i][j] = LCS length of target[i:] and answer[j:]
             const dp = Array(m + 1).fill(null).map(() => Array(n + 1).fill(0));
 
-            for (let i = 1; i <= m; i++) {
-                for (let j = 1; j <= n; j++) {
-                    if (target[i - 1].normalized === answer[j - 1].normalized) {
-                        dp[i][j] = dp[i - 1][j - 1] + 1;
+            for (let i = m - 1; i >= 0; i--) {
+                for (let j = n - 1; j >= 0; j--) {
+                    if (target[i].normalized === answer[j].normalized) {
+                        dp[i][j] = dp[i + 1][j + 1] + 1;
                     } else {
-                        dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
+                        dp[i][j] = Math.max(dp[i + 1][j], dp[i][j + 1]);
                     }
                 }
             }
 
-            // Backtrack to find matching indices
+            // Forward track: greedily match earliest target words left-to-right
             const targetMatches = new Set();
             const answerMatches = new Set();
-            let i = m, j = n;
+            let ti = 0; // current target index
 
-            while (i > 0 && j > 0) {
-                if (target[i - 1].normalized === answer[j - 1].normalized) {
-                    targetMatches.add(i - 1);
-                    answerMatches.add(j - 1);
-                    i--;
-                    j--;
-                } else if (dp[i - 1][j] > dp[i][j - 1]) {
-                    i--;
-                } else {
-                    j--;
+            for (let ai = 0; ai < n; ai++) {
+                // Find the earliest target position >= ti that matches answer[ai]
+                // and is part of an optimal LCS solution
+                for (let t = ti; t < m; t++) {
+                    if (target[t].normalized === answer[ai].normalized) {
+                        // Check if taking this match preserves optimality:
+                        // LCS from (ti, ai) should equal 1 + LCS from (t+1, ai+1)
+                        if (dp[ti][ai] === 1 + dp[t + 1][ai + 1]) {
+                            targetMatches.add(t);
+                            answerMatches.add(ai);
+                            ti = t + 1;
+                            break;
+                        }
+                    }
                 }
             }
 
